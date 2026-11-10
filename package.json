@@ -11,6 +11,7 @@
     "appId": "com.sitedock.telemost",
     "productName": "Telemost",
     "directories": { "output": "dist" },
+    "afterPack": "build/afterPack.js",
     "mac": { "target": "dmg" },
     "win": { "target": "nsis" },
     "linux": { "target": "AppImage" }
