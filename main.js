@@ -30,6 +30,8 @@ let tray = null;
 let win = null;
 let isQuitting = false;
 let hasUnread = null;
+let unreadNotification = null;
+let unreadNotificationTimer = null;
 
 const APP_URL = "https://telemost.360.yandex.ru";
 const APP_ORIGIN = new URL(APP_URL).origin;
@@ -113,16 +115,41 @@ function updateTrayIcon(hasUnread) {
   tray.setImage(icon);
 }
 
-// Отправляет системное уведомление о новых сообщениях
+// Закрывает текущее уведомление о непрочитанных сообщениях
+function closeUnreadNotification() {
+  if (unreadNotificationTimer) {
+    clearTimeout(unreadNotificationTimer);
+    unreadNotificationTimer = null;
+  }
+
+  if (unreadNotification) {
+    unreadNotification.close();
+    unreadNotification = null;
+  }
+}
+
+// Отправляет системное уведомление о новых сообщениях.
+// Уведомление живёт ограниченное время и закрывается при прочтении.
 function showUnreadNotification() {
   if (!Notification.isSupported()) return;
 
-  new Notification({
+  closeUnreadNotification();
+
+  const notification = new Notification({
     title: 'Telemost',
     body: 'Новые сообщения',
     icon: ICON_NORMAL,
     silent: false,
-  }).show();
+    timeoutType: 'never',
+  });
+
+  unreadNotification = notification;
+  notification.show();
+
+  // Автоматически закрываем через 15 секунд, если сообщения не прочитали.
+  unreadNotificationTimer = setTimeout(() => {
+    closeUnreadNotification();
+  }, 15000);
 }
 
 function openExternally(url) {
@@ -146,6 +173,9 @@ ipcMain.on('telemost-unread-change', (event, value) => {
 
   if (unread && !hasUnread) {
     showUnreadNotification();
+  } else if (!unread && hasUnread) {
+    // Сообщения прочитали — убираем уведомление.
+    closeUnreadNotification();
   }
 
   hasUnread = unread;
@@ -241,6 +271,10 @@ if (gotTheLock) {
 
   app.on('window-all-closed', () => {
     // Окно скрывается в трей, а не закрывается, поэтому здесь ничего не делаем.
+  });
+
+  app.on('before-quit', () => {
+    closeUnreadNotification();
   });
 
   app.on('activate', () => {
