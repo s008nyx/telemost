@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -10,9 +10,26 @@ if (process.platform === 'linux') {
   app.setName('Telemost');
 }
 
+// Защита от множественного запуска: второй экземпляр лишь
+// разворачивает уже открытое окно и завершается.
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!win) return;
+
+    if (win.isMinimized()) win.restore();
+    if (!win.isVisible()) win.show();
+    win.focus();
+  });
+}
+
 let tray = null;
 let win = null;
 let isQuitting = false;
+let hasUnread = null;
 
 const APP_URL = "https://telemost.360.yandex.ru";
 const APP_ORIGIN = new URL(APP_URL).origin;
@@ -96,16 +113,43 @@ function updateTrayIcon(hasUnread) {
   tray.setImage(icon);
 }
 
+// Отправляет системное уведомление о новых сообщениях
+function showUnreadNotification() {
+  if (!Notification.isSupported()) return;
+
+  new Notification({
+    title: 'Telemost',
+    body: 'Новые сообщения',
+    icon: ICON_NORMAL,
+    silent: false,
+  }).show();
+}
+
 function openExternally(url) {
   const protocol = new URL(url).protocol;
   if (protocol === 'http:' || protocol === 'https:') shell.openExternal(url);
 }
 
-ipcMain.on('telemost-unread-change', (event, hasUnread) => {
+ipcMain.on('telemost-unread-change', (event, value) => {
   // Принимаем сообщения только от нашего окна
   if (event.sender !== win?.webContents) return;
 
-  updateTrayIcon(hasUnread);
+  const unread = Boolean(value);
+
+  // Первая проверка задаёт базовое состояние, чтобы не уведомлять
+  // о старых непрочитанных сообщениях при открытии приложения.
+  if (hasUnread === null) {
+    hasUnread = unread;
+    updateTrayIcon(unread);
+    return;
+  }
+
+  if (unread && !hasUnread) {
+    showUnreadNotification();
+  }
+
+  hasUnread = unread;
+  updateTrayIcon(unread);
 });
 
 function createWindow() {
@@ -189,12 +233,22 @@ function createWindow() {
   tray.setToolTip('Yandex Telemost');
 }
 
-app.whenReady().then(() => {
-  installDesktopIntegration();
-  createWindow();
-});
-app.on('window-all-closed', () => {
-});
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
+if (gotTheLock) {
+  app.whenReady().then(() => {
+    installDesktopIntegration();
+    createWindow();
+  });
+
+  app.on('window-all-closed', () => {
+    // Окно скрывается в трей, а не закрывается, поэтому здесь ничего не делаем.
+  });
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    } else if (win && !win.isVisible()) {
+      win.show();
+      win.focus();
+    }
+  });
+}
