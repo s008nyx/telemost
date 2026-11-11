@@ -11,10 +11,10 @@
     "appId": "com.sitedock.telemost",
     "productName": "Telemost",
     "directories": { "output": "dist" },
-    "afterPack": "build/afterPack.js",
     "mac": { "target": "dmg" },
     "win": { "target": "nsis" },
-    "linux": { "target": "AppImage" }
+    "linux": { "target": "deb", "category": "Network", "maintainer": "Telemost <telemost@example.com>" },
+    "deb": { "afterInstall": "build/after-install.tpl" }
   },
   "devDependencies": {
     "electron": "^32.0.0",

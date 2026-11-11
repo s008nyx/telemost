@@ -9,7 +9,7 @@
 - Индикация непрочитанных сообщений в иконке трея.
 - Системные уведомления о новых сообщениях.
 - Открытие внешних ссылок в системном браузере.
-- Иконка приложения в доке Ubuntu/GNOME (автоинтеграция AppImage).
+- Иконка приложения в доке Ubuntu/GNOME.
 - Защита от множественного запуска: повторный запуск разворачивает окно.
 
 ## Требования
@@ -39,61 +39,26 @@ npm run pack
 
 - macOS — `dmg`
 - Windows — `nsis`
-- Linux — `AppImage`
+- Linux — `deb`
 
-## Известные проблемы
-
-### Ошибка SUID sandbox на Ubuntu 24.04
-
-При запуске собранного AppImage может появиться ошибка:
-
-```
-FATAL:setuid_sandbox_host.cc(163)] The SUID sandbox helper binary was found, but is not configured correctly...
-```
-
-Причина — в Ubuntu 24.04 по умолчанию AppArmor ограничивает небезопасные
-пользовательские пространства имён (user namespaces), из-за чего Chromium
-пытается использовать SUID-песочницу, которая не работает внутри AppImage.
-
-**Исправление в коде приложения.** В [`build/afterPack.js`](build/afterPack.js:1) добавлен хук сборки, который оборачивает исполняемый файл Electron в скрипт-обёртку и автоматически добавляет `--no-sandbox` при запуске AppImage. После пересборки:
+Установка Linux-пакета:
 
 ```bash
-npm run pack
-./dist/Telemost-1.0.0.AppImage
+sudo apt install ./dist/telemost_1.0.0_amd64.deb
 ```
 
-AppImage запускается из терминала без ошибки даже без дополнительных флагов.
+## Примечание по Ubuntu 24.04
 
-**Быстрый запуск** (без изменения системы и без пересборки):
-
-```bash
-./dist/Telemost-1.0.0.AppImage --no-sandbox
-```
-
-или
-
-```bash
-ELECTRON_DISABLE_SANDBOX=1 ./dist/Telemost-1.0.0.AppImage
-```
-
-**Постоянное исправление** (рекомендуется):
-
-```bash
-sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-```
-
-Чтобы сохранить настройку после перезагрузки:
-
-```bash
-echo 'kernel.apparmor_restrict_unprivileged_userns=0' | sudo tee /etc/sysctl.d/60-apparmor-userns.conf
-```
+Раньше при запуске AppImage возникала ошибка `setuid_sandbox_host.cc(163)`.
+Сборка `deb` избавляет от неё: в [`build/after-install.tpl`](build/after-install.tpl:1)
+находится postinst-скрипт, который всегда выставляет `chrome-sandbox` режим `4755`,
+поэтому отдельный `--no-sandbox` не нужен.
 
 ## Структура проекта
 
 | Файл | Назначение |
 |------|-----------|
-| [`main.js`](main.js:1) | Главный процесс Electron: окно, трей, IPC, навигация, автоинтеграция |
+| [`main.js`](main.js:1) | Главный процесс Electron: окно, трей, IPC, навигация, уведомления |
 | [`preload.js`](preload.js:1) | Preload-скрипт: мониторинг непрочитанных сообщений |
-| [`build/afterPack.js`](build/afterPack.js:1) | Хук сборки: обёртка AppImage с `--no-sandbox` |
 | `icon.png` / `icon-unread.png` | Иконки трея |
 | `icon.svg` | Векторная иконка |
